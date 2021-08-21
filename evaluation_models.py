@@ -43,7 +43,7 @@ def encode_data(model, data_loader, log_step=10, logging=print):
             # img_emb, cap_emb = model(images, captions)
             img_emb = model.encode_image(images)
             cap_emb = model.encode_text(captions)
-            import pdb; pdb.set_trace()
+            # import pdb; pdb.set_trace()
             # initialize the numpy arrays given the size of the embeddings
             if img_embs is None:
                 img_embs = np.zeros((len(data_loader.dataset), img_emb.size(1)))
