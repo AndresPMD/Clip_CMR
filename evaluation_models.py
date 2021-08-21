@@ -7,11 +7,9 @@ import numpy
 from data import get_test_loader
 import time
 import numpy as np
-from vocab import Vocabulary  # NOQA
 from collections import OrderedDict
-
-
-
+import clip
+from PIL import Image
 
 class AverageMeter(object):
     """Computes and stores the average and current value"""
@@ -109,43 +107,20 @@ def encode_data(model, data_loader, log_step=10, logging=print):
 
 
 
-
-
-def evalrank(model_path, model_path2, data_path=None, split='dev', fold5=False):
+def evalrank(args):
     """
     Evaluate a trained model on either dev or test. If `fold5=True`, 5 fold
     cross-validation is done (only for MSCOCO). Otherwise, the full data is
     used for evaluation.
     """
     # load model and options
-    checkpoint = torch.load(model_path)
-    opt = checkpoint['opt']
-
-    checkpoint2 = torch.load(model_path2)
-    opt2 = checkpoint2['opt']
-
-    if data_path is not None:
-        opt.data_path = data_path
-
-    # load vocabulary used by the model
-    with open(os.path.join(opt.vocab_path,
-                           '%s_vocab.pkl' % opt.data_name), 'rb') as f:
-        vocab = pickle.load(f)
-    opt.vocab_size = len(vocab)
-
-
-
-    model = VSRN(opt)
-    model2 = VSRN(opt2)
-
-    # load model state
-    model.load_state_dict(checkpoint['model'])
-
-    model2.load_state_dict(checkpoint2['model'])
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    print ("Running on: ", device)
+    model, preprocess = clip.load(args.cnn, device=device)
 
     print('Loading dataset')
-    data_loader = get_test_loader(split, opt.data_name, vocab, opt.crop_size,
-                                  opt.batch_size, opt.workers, opt)
+    data_loader = get_test_loader(args.split, args.data_name, args.batch_size, args.workers, args, preprocess)
+
 
     print('Computing results...')
     img_embs, cap_embs = encode_data(model, data_loader)
