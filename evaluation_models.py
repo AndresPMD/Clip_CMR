@@ -21,6 +21,11 @@ def order_sim(im, s):
     return score
 
 
+def cosine_sim(im, s):
+    """Cosine similarity between all the image and sentence pairs
+    """
+    return im.mm(s.t())
+
 def encode_data(model, data_loader, log_step=10, logging=print):
     """Encode all images and captions loadable by `data_loader`
     """
@@ -39,7 +44,7 @@ def encode_data(model, data_loader, log_step=10, logging=print):
             if torch.cuda.is_available():
                 images = images.cuda()
                 captions =  captions.cuda()
-            # pdb.set_trace()
+
             # img_emb, cap_emb = model(images, captions)
             img_emb = model.encode_image(images)
             cap_emb = model.encode_text(captions)
@@ -117,7 +122,7 @@ def i2t(images, captions, npts=None, measure='cosine', return_ranks=False):
             if index % bs == 0:
                 mx = min(images.shape[0], 5 * (index + bs))
                 im2 = images[5 * index:mx:5]
-                d2 = order_sim(torch.Tensor(im2).cuda(),
+                d2 = cosine_sim(torch.Tensor(im2).cuda(),
                                torch.Tensor(captions).cuda())
                 d2 = d2.cpu().numpy()
             d = d2[index % bs]
@@ -171,7 +176,7 @@ def t2i(images, captions, npts=None, measure='cosine', return_ranks=False):
             if 5 * index % bs == 0:
                 mx = min(captions.shape[0], 5 * index + bs)
                 q2 = captions[5 * index:mx]
-                d2 = order_sim(torch.Tensor(ims).cuda(),
+                d2 = cosine_sim(torch.Tensor(ims).cuda(),
                                torch.Tensor(q2).cuda())
                 d2 = d2.cpu().numpy()
 

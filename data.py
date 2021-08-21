@@ -51,7 +51,7 @@ class GenericDataset(data.Dataset):
 #################
 
 def get_loader(transform, split, data_name, batch_size, num_workers, args,):
-    """Returns torch.utils.data.DataLoader for custom coco dataset."""
+    """Returns torch.utils.data.DataLoader for custom dataset."""
 
     dataset = GenericDataset(transform, split, data_name)
     # Data loader
