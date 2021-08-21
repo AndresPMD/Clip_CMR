@@ -7,77 +7,6 @@ import numpy as np
 import json
 
 
-class CocoDataset(data.Dataset):
-    """COCO Custom Dataset compatible with torch.utils.data.DataLoader."""
-
-    def __init__(self, root, json, vocab, transform=None, ids=None):
-        """
-        Args:
-            root: image directory.
-            json: coco annotation file path.
-            vocab: vocabulary wrapper.
-            transform: transformer for image.
-        """
-        self.root = root
-        # when using `restval`, two json files are needed
-        if isinstance(json, tuple):
-            self.coco = (COCO(json[0]), COCO(json[1]))
-        else:
-            self.coco = (COCO(json),)
-            self.root = (root,)
-        # if ids provided by get_paths, use split-specific ids
-        if ids is None:
-            self.ids = list(self.coco.anns.keys())
-        else:
-            self.ids = ids
-
-        # if `restval` data is to be used, record the break point for ids
-        if isinstance(self.ids, tuple):
-            self.bp = len(self.ids[0])
-            self.ids = list(self.ids[0]) + list(self.ids[1])
-        else:
-            self.bp = len(self.ids)
-        self.vocab = vocab
-        self.transform = transform
-
-    def __getitem__(self, index):
-        """This function returns a tuple that is further passed to collate_fn
-        """
-        vocab = self.vocab
-        root, caption, img_id, path, image = self.get_raw_item(index)
-
-        if self.transform is not None:
-            image = self.transform(image)
-
-        # Convert caption (string) to word ids.
-        tokens = nltk.tokenize.word_tokenize(
-            str(caption).lower().decode('utf-8'))
-        caption = []
-        caption.append(vocab('<start>'))
-        caption.extend([vocab(token) for token in tokens])
-        caption.append(vocab('<end>'))
-        target = torch.Tensor(caption)
-        return image, target, index, img_id
-
-    def get_raw_item(self, index):
-        if index < self.bp:
-            coco = self.coco[0]
-            root = self.root[0]
-        else:
-            coco = self.coco[1]
-            root = self.root[1]
-        ann_id = self.ids[index]
-        caption = coco.anns[ann_id]['caption']
-        img_id = coco.anns[ann_id]['image_id']
-        path = coco.loadImgs(img_id)[0]['file_name']
-        image = Image.open(os.path.join(root, path)).convert('RGB')
-
-        return root, caption, img_id, path, image
-
-    def __len__(self):
-        return len(self.ids)
-
-
 class GenericDataset(data.Dataset):
     """
     Dataset loader for all datasets.
@@ -102,25 +31,12 @@ class GenericDataset(data.Dataset):
     def __getitem__(self, index):
         """This function returns a tuple that is further passed to collate_fn
         """
-        image = self.images[index]
+        image_name = self.images[index]
         caption = self.captions[index]
 
-        
-        path = self.dataset[img_id]['filename']
+        image = self.transform(Image.open(self.img_path + image_name)).unsqueeze(0)
 
-        image = Image.open(os.path.join(root, path)).convert('RGB')
-        if self.transform is not None:
-            image = self.transform(image)
-
-        # Convert caption (string) to word ids.
-        tokens = nltk.tokenize.word_tokenize(
-            str(caption).lower().decode('utf-8'))
-        caption = []
-        caption.append(vocab('<start>'))
-        caption.extend([vocab(token) for token in tokens])
-        caption.append(vocab('<end>'))
-        target = torch.Tensor(caption)
-        return image, target, index, img_id
+        return image, caption, index, image_name
 
     def __len__(self):
         return len(self.ids)

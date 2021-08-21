@@ -10,102 +10,42 @@ import numpy as np
 from collections import OrderedDict
 import clip
 from PIL import Image
-
-class AverageMeter(object):
-    """Computes and stores the average and current value"""
-
-    def __init__(self):
-        self.reset()
-
-    def reset(self):
-        self.val = 0
-        self.avg = 0
-        self.sum = 0
-        self.count = 0
-
-    def update(self, val, n=0):
-        self.val = val
-        self.sum += val * n
-        self.count += n
-        self.avg = self.sum / (.0001 + self.count)
-
-    def __str__(self):
-        """String representation for logging
-        """
-        # for values that should be recorded exactly e.g. iteration number
-        if self.count == 0:
-            return str(self.val)
-        # for stats
-        return '%.4f (%.4f)' % (self.val, self.avg)
-
-
-class LogCollector(object):
-    """A collection of logging objects that can change from train to val"""
-
-    def __init__(self):
-        # to keep the order of logged variables deterministic
-        self.meters = OrderedDict()
-
-    def update(self, k, v, n=0):
-        # create a new meter if previously not recorded
-        if k not in self.meters:
-            self.meters[k] = AverageMeter()
-        self.meters[k].update(v, n)
-
-    def __str__(self):
-        """Concatenate the meters in one log line
-        """
-        s = ''
-        for i, (k, v) in enumerate(self.meters.iteritems()):
-            if i > 0:
-                s += '  '
-            s += k + ' ' + str(v)
-        return s
-
-    def tb_log(self, tb_logger, prefix='', step=None):
-        """Log using tensorboard
-        """
-        for k, v in self.meters.iteritems():
-            tb_logger.log_value(prefix + k, v.val, step=step)
+from tqdm import tqdm
 
 
 def encode_data(model, data_loader, log_step=10, logging=print):
     """Encode all images and captions loadable by `data_loader`
     """
-    batch_time = AverageMeter()
-    val_logger = LogCollector()
-
     # switch to evaluate mode
-    model.val_start()
 
-    end = time.time()
 
     # numpy array to keep all the embeddings
     img_embs = None
     cap_embs = None
-    for i, (images, captions, lengths, ids, caption_labels, caption_masks, categories) in enumerate(data_loader):
-        # make sure val logger is used
-        model.logger = val_logger
+    with torch.no_grad():
 
-        # compute the embeddings
-        img_emb, cap_emb, fc_img_emd = model.forward_emb(images, captions, lengths, categories,
-                                             volatile=True)
+        for i, (images, captions, index, image_name) in enumerate(data_loader):
 
-        # initialize the numpy arrays given the size of the embeddings
-        if img_embs is None:
-            img_embs = np.zeros((len(data_loader.dataset), img_emb.size(1)))
-            cap_embs = np.zeros((len(data_loader.dataset), cap_emb.size(1)))
+            captions = torch.cat([clip.tokenize(c) for c in captions])
+            # compute the embeddings
+            if torch.cuda.is_available():
+                images = images.cuda()
+                captions =  captions.cuda()
 
-        # preserve the embeddings by copying from gpu and converting to numpy
-        img_embs[ids] = img_emb.data.cpu().numpy().copy()
-        cap_embs[ids] = cap_emb.data.cpu().numpy().copy()
+            logits_per_image, logits_per_text = model(image, text)
+        
+            # initialize the numpy arrays given the size of the embeddings
+            if img_embs is None:
+                img_embs = np.zeros((len(data_loader.dataset), img_emb.size(1)))
+                cap_embs = np.zeros((len(data_loader.dataset), cap_emb.size(1)))
 
-
+            # preserve the embeddings by copying from gpu and converting to numpy
+            img_embs[i] = img_emb.data.cpu().numpy().copy()
+            cap_embs[i] = cap_emb.data.cpu().numpy().copy()
+        
         del images, captions
 
     return img_embs, cap_embs
-
-
 
 def evalrank(args):
     """
@@ -124,59 +64,25 @@ def evalrank(args):
 
     print('Computing results...')
     img_embs, cap_embs = encode_data(model, data_loader)
-    img_embs2, cap_embs2 = img_embs, cap_embs
-    # img_embs2, cap_embs2 = encode_data(model2, data_loader)
+    
 
     print('Images: %d, Captions: %d' %
           (img_embs.shape[0] / 5, cap_embs.shape[0]))
 
-    if not fold5:
-        # no cross-validation, full evaluation
-        r, rt = i2t(img_embs, cap_embs, img_embs2, cap_embs2, measure=opt.measure, return_ranks=True)
-        ri, rti = t2i(img_embs, cap_embs, img_embs2, cap_embs2, 
-                      measure=opt.measure, return_ranks=True)
-        ar = (r[0] + r[1] + r[2]) / 3
-        ari = (ri[0] + ri[1] + ri[2]) / 3
-        rsum = r[0] + r[1] + r[2] + ri[0] + ri[1] + ri[2]
-        print("rsum: %.1f" % rsum)
-        print("Average i2t Recall: %.1f" % ar)
-        print("Image to text: %.1f %.1f %.1f %.1f %.1f" % r)
-        print("Average t2i Recall: %.1f" % ari)
-        print("Text to image: %.1f %.1f %.1f %.1f %.1f" % ri)
-    else:
-        # 5fold cross-validation, only for MSCOCO
-        results = []
-        for i in range(5):
-            r, rt0 = i2t(img_embs[i * 5000:(i + 1) * 5000], cap_embs[i * 5000:(i + 1) *5000], 
-                img_embs2[i * 5000:(i + 1) * 5000], cap_embs2[i * 5000:(i + 1) *5000], 
-                measure=opt.measure,
-                         return_ranks=True)
-            print("Image to text: %.1f, %.1f, %.1f, %.1f, %.1f" % r)
-            ri, rti0 = t2i(img_embs[i * 5000:(i + 1) * 5000],cap_embs[i * 5000:(i + 1) *5000], 
-                img_embs2[i * 5000:(i + 1) * 5000],cap_embs2[i * 5000:(i + 1) *5000], 
-                measure=opt.measure,
-                           return_ranks=True)
-            if i == 0:
-                rt, rti = rt0, rti0
-            print("Text to image: %.1f, %.1f, %.1f, %.1f, %.1f" % ri)
-            ar = (r[0] + r[1] + r[2]) / 3
-            ari = (ri[0] + ri[1] + ri[2]) / 3
-            rsum = r[0] + r[1] + r[2] + ri[0] + ri[1] + ri[2]
-            print("rsum: %.1f ar: %.1f ari: %.1f" % (rsum, ar, ari))
-            results += [list(r) + list(ri) + [ar, ari, rsum]]
 
-        print("-----------------------------------")
-        print("Mean metrics: ")
-        mean_metrics = tuple(np.array(results).mean(axis=0).flatten())
-        print("rsum: %.1f" % (mean_metrics[10] * 6))
-        print("Average i2t Recall: %.1f" % mean_metrics[11])
-        print("Image to text: %.1f %.1f %.1f %.1f %.1f" %
-              mean_metrics[:5])
-        print("Average t2i Recall: %.1f" % mean_metrics[12])
-        print("Text to image: %.1f %.1f %.1f %.1f %.1f" %
-              mean_metrics[5:10])
-
-    torch.save({'rt': rt, 'rti': rti}, 'ranks.pth.tar')
+    # no cross-validation, full evaluation
+    r, rt = i2t(img_embs, cap_embs, img_embs2, cap_embs2, measure=opt.measure, return_ranks=True)
+    ri, rti = t2i(img_embs, cap_embs, img_embs2, cap_embs2, 
+                    measure=opt.measure, return_ranks=True)
+    ar = (r[0] + r[1] + r[2]) / 3
+    ari = (ri[0] + ri[1] + ri[2]) / 3
+    rsum = r[0] + r[1] + r[2] + ri[0] + ri[1] + ri[2]
+    print("rsum: %.1f" % rsum)
+    print("Average i2t Recall: %.1f" % ar)
+    print("Image to text: %.1f %.1f %.1f %.1f %.1f" % r)
+    print("Average t2i Recall: %.1f" % ari)
+    print("Text to image: %.1f %.1f %.1f %.1f %.1f" % ri)
+    
 
 
 def i2t(images, captions, images2, captions2, npts=None, measure='cosine', return_ranks=False):
