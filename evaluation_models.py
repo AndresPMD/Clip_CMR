@@ -35,15 +35,13 @@ def encode_data(model, data_loader, log_step=10, logging=print):
         for i, (images, captions, index, image_name) in tqdm(enumerate(data_loader)):
 
             captions = torch.cat([clip.tokenize(c) for c in captions])
-            
-            captions = captions[:,:77]
             # compute the embeddings
             if torch.cuda.is_available():
                 images = images.cuda()
                 captions =  captions.cuda()
             # pdb.set_trace()
             img_emb, cap_emb = model(images, captions)
-        
+            import pdb; pdb.set_trace()
             # initialize the numpy arrays given the size of the embeddings
             if img_embs is None:
                 img_embs = np.zeros((len(data_loader.dataset), img_emb.size(1)))
