@@ -35,6 +35,11 @@ class GenericDataset(data.Dataset):
         """
         image_name = self.images[index]
         caption = self.captions[index]
+        caption = caption.split(' ')
+        short_caption = caption[:30]
+        # if index >= 3905:
+        #     import pdb; pdb.set_trace()
+        caption = ' '.join(short_caption)
 
         image = self.transform(Image.open(self.img_path + image_name))
 

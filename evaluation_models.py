@@ -11,7 +11,15 @@ from collections import OrderedDict
 import clip
 from PIL import Image
 from tqdm import tqdm
-import pdb
+
+def order_sim(im, s):
+    """Order embeddings similarity measure $max(0, s-im)$
+    """
+    YmX = (s.unsqueeze(1).expand(s.size(0), im.size(0), s.size(1))
+           - im.unsqueeze(0).expand(s.size(0), im.size(0), s.size(1)))
+    score = -YmX.clamp(min=0).pow(2).sum(2).sqrt().t()
+    return score
+
 
 def encode_data(model, data_loader, log_step=10, logging=print):
     """Encode all images and captions loadable by `data_loader`
@@ -27,6 +35,7 @@ def encode_data(model, data_loader, log_step=10, logging=print):
         for i, (images, captions, index, image_name) in tqdm(enumerate(data_loader)):
 
             captions = torch.cat([clip.tokenize(c) for c in captions])
+            
             captions = captions[:,:77]
             # compute the embeddings
             if torch.cuda.is_available():
@@ -72,9 +81,8 @@ def evalrank(args):
 
 
     # no cross-validation, full evaluation
-    r, rt = i2t(img_embs, cap_embs, img_embs2, cap_embs2, measure=opt.measure, return_ranks=True)
-    ri, rti = t2i(img_embs, cap_embs, img_embs2, cap_embs2, 
-                    measure=opt.measure, return_ranks=True)
+    r, rt = i2t(img_embs, cap_embs, return_ranks=True)
+    ri, rti = t2i(img_embs, cap_embs, return_ranks=True)
     ar = (r[0] + r[1] + r[2]) / 3
     ari = (ri[0] + ri[1] + ri[2]) / 3
     rsum = r[0] + r[1] + r[2] + ri[0] + ri[1] + ri[2]
@@ -85,8 +93,7 @@ def evalrank(args):
     print("Text to image: %.1f %.1f %.1f %.1f %.1f" % ri)
     
 
-
-def i2t(images, captions, images2, captions2, npts=None, measure='cosine', return_ranks=False):
+def i2t(images, captions, npts=None, measure='cosine', return_ranks=False):
     """
     Images->Text (Image Annotation)
     Images: (5N, K) matrix of images
@@ -95,14 +102,15 @@ def i2t(images, captions, images2, captions2, npts=None, measure='cosine', retur
     if npts is None:
         npts = images.shape[0] / 5
     index_list = []
-
+    npts = int(npts)
+    # import pdb; pdb.set_trace()
     ranks = numpy.zeros(npts)
     top1 = numpy.zeros(npts)
     for index in range(npts):
 
         # Get query image
         im = images[5 * index].reshape(1, images.shape[1])
-        im_2 = images2[5 * index].reshape(1, images2.shape[1])
+
         # Compute scores
         if measure == 'order':
             bs = 100
@@ -115,9 +123,6 @@ def i2t(images, captions, images2, captions2, npts=None, measure='cosine', retur
             d = d2[index % bs]
         else:
             d = numpy.dot(im, captions.T).flatten()
-            d2 = numpy.dot(im_2, captions2.T).flatten()
-            d = (d + d2)/2
-            
         inds = numpy.argsort(d)[::-1]
         index_list.append(inds[0])
 
@@ -142,7 +147,7 @@ def i2t(images, captions, images2, captions2, npts=None, measure='cosine', retur
         return (r1, r5, r10, medr, meanr)
 
 
-def t2i(images, captions, images2, captions2, npts=None, measure='cosine', return_ranks=False):
+def t2i(images, captions, npts=None, measure='cosine', return_ranks=False):
     """
     Text->Images (Image Search)
     Images: (5N, K) matrix of images
@@ -151,8 +156,7 @@ def t2i(images, captions, images2, captions2, npts=None, measure='cosine', retur
     if npts is None:
         npts = images.shape[0] / 5
     ims = numpy.array([images[i] for i in range(0, len(images), 5)])
-
-    ims2 = numpy.array([images2[i] for i in range(0, len(images2), 5)])
+    npts = int(npts)
 
     ranks = numpy.zeros(5 * npts)
     top1 = numpy.zeros(5 * npts)
@@ -160,7 +164,7 @@ def t2i(images, captions, images2, captions2, npts=None, measure='cosine', retur
 
         # Get query captions
         queries = captions[5 * index:5 * index + 5]
-        queries2 = captions2[5 * index:5 * index + 5]
+
         # Compute scores
         if measure == 'order':
             bs = 100
@@ -174,9 +178,6 @@ def t2i(images, captions, images2, captions2, npts=None, measure='cosine', retur
             d = d2[:, (5 * index) % bs:(5 * index) % bs + 5].T
         else:
             d = numpy.dot(queries, ims.T)
-            d2 = numpy.dot(queries2, ims2.T)
-            d = (d+d2)/2
-            
         inds = numpy.zeros(d.shape)
         for i in range(len(inds)):
             inds[i] = numpy.argsort(d[i])[::-1]
