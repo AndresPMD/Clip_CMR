@@ -36,7 +36,7 @@ class GenericDataset(data.Dataset):
         image_name = self.images[index]
         caption = self.captions[index]
         caption = caption.split(' ')
-        short_caption = caption[:30]
+        short_caption = caption[:40]
         # if index >= 3905:
         #     import pdb; pdb.set_trace()
         caption = ' '.join(short_caption)
@@ -48,42 +48,7 @@ class GenericDataset(data.Dataset):
     def __len__(self):
         return len(self.images)
 
-
 #################
-
-def collate_fn(data):
-    """Build mini-batch tensors from a list of (image, caption) tuples.
-    Args:
-        data: list of (image, caption) tuple.
-            - image: torch tensor of shape (3, 256, 256).
-            - caption: torch tensor of shape (?); variable length.
-
-    Returns:
-        images: torch tensor of shape (batch_size, 3, 256, 256).
-        targets: torch tensor of shape (batch_size, padded_length).
-        lengths: list; valid length for each padded caption.
-    """
-    # Sort a data list by caption length
-    data.sort(key=lambda x: len(x[1]), reverse=True)
-    images, captions, ids, img_ids, caption_labels, caption_masks, categories = zip(*data)
-
-    # Merge images (convert tuple of 3D tensor to 4D tensor)
-    images = torch.stack(images, 0)
-
-    caption_labels_ = torch.stack(caption_labels, 0)
-    caption_masks_ = torch.stack(caption_masks, 0)
-
-    # Merget captions (convert tuple of 1D tensor to 2D tensor)
-    lengths = [len(cap) for cap in captions]
-    targets = torch.zeros(len(captions), max(lengths)).long()
-    for i, cap in enumerate(captions):
-        end = lengths[i]
-        targets[i, :end] = cap[:end]
-
-    categories = torch.stack(categories, 0)
-
-    return images, targets, lengths, ids, caption_labels_, caption_masks_, categories
-
 
 def get_loader(transform, split, data_name, batch_size, num_workers, args, collate_fn=collate_fn):
     """Returns torch.utils.data.DataLoader for custom coco dataset."""
@@ -96,12 +61,6 @@ def get_loader(transform, split, data_name, batch_size, num_workers, args, colla
                                               pin_memory=True,
                                               num_workers=num_workers)
     return data_loader
-
-
-
-
-
-
 
 def get_test_loader(split, data_name, batch_size, workers, args, preprocess):
 
