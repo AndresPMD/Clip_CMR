@@ -25,7 +25,7 @@ for item in test:
     
     for caption_dict in item['sentences']:
         with open ('./data/f30k_captions.txt', 'a') as fp:
-            fp.write(caption_dict['raw'] + '\n')
+            fp.write(caption_dict['raw'].strip() + '\n')
 
 # COCO
 # LAZY CODING
@@ -40,8 +40,9 @@ for item in test[:1000]:
         with open ('./data/coco_images.txt', 'a') as fp:
             fp.write(item['filename'] + '\n')
         
-    for caption_dict in item['sentences']:
+    for idx, caption_dict in enumerate (item['sentences']):
+        if idx >= 5: break
         with open ('./data/coco_captions.txt', 'a') as fp:
-            fp.write(caption_dict['raw'] + '\n')
+            fp.write(caption_dict['raw'].strip() + '\n')
 
 print("Complete!")

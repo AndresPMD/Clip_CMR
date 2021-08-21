@@ -122,7 +122,7 @@ def i2t(images, captions, npts=None, measure='cosine', return_ranks=False):
             if index % bs == 0:
                 mx = min(images.shape[0], 5 * (index + bs))
                 im2 = images[5 * index:mx:5]
-                d2 = cosine_sim(torch.Tensor(im2).cuda(),
+                d2 = order_sim(torch.Tensor(im2).cuda(),
                                torch.Tensor(captions).cuda())
                 d2 = d2.cpu().numpy()
             d = d2[index % bs]
@@ -176,7 +176,7 @@ def t2i(images, captions, npts=None, measure='cosine', return_ranks=False):
             if 5 * index % bs == 0:
                 mx = min(captions.shape[0], 5 * index + bs)
                 q2 = captions[5 * index:mx]
-                d2 = cosine_sim(torch.Tensor(ims).cuda(),
+                d2 = order_sim(torch.Tensor(ims).cuda(),
                                torch.Tensor(q2).cuda())
                 d2 = d2.cpu().numpy()
 
