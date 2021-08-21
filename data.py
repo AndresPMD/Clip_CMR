@@ -23,10 +23,12 @@ class GenericDataset(data.Dataset):
             self.img_path = '/SSD/Datasets/Flickr30K/images/'
         
         with open ("./data/{}_images.txt".format(self.data_name), "r") as fp:
-            self.images = readlines(fp)
+            self.images = fp.readlines()
+        self.images = [image.strip() for image in self.images]
         
         with open ("./data/{}_captions.txt".format(self.data_name), "r") as fp:
-            self.captions = readlines(fp)
+            self.captions = fp.readlines()
+        self.captions = [caption.strip() for caption in self.captions]
 
     def __getitem__(self, index):
         """This function returns a tuple that is further passed to collate_fn
@@ -34,12 +36,12 @@ class GenericDataset(data.Dataset):
         image_name = self.images[index]
         caption = self.captions[index]
 
-        image = self.transform(Image.open(self.img_path + image_name)).unsqueeze(0)
+        image = self.transform(Image.open(self.img_path + image_name))
 
         return image, caption, index, image_name
 
     def __len__(self):
-        return len(self.ids)
+        return len(self.images)
 
 
 #################
@@ -102,16 +104,6 @@ def get_test_loader(split, data_name, batch_size, workers, args, preprocess):
     transform = preprocess
 
     test_loader = get_loader(transform, args.split, args.data_name, args.batch_size, args.workers, args,)
-
-        
-        
-        opt.data_name, split_name,
-                                    roots[split_name]['img'],
-                                    roots[split_name]['cap'],
-                                    vocab, transform, ids=ids[split_name],
-                                    batch_size=batch_size, shuffle=False,
-                                    num_workers=workers,
-                                    collate_fn=collate_fn)
 
     return test_loader
 

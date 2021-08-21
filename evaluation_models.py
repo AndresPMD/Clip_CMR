@@ -11,7 +11,7 @@ from collections import OrderedDict
 import clip
 from PIL import Image
 from tqdm import tqdm
-
+import pdb
 
 def encode_data(model, data_loader, log_step=10, logging=print):
     """Encode all images and captions loadable by `data_loader`
@@ -24,15 +24,16 @@ def encode_data(model, data_loader, log_step=10, logging=print):
     cap_embs = None
     with torch.no_grad():
 
-        for i, (images, captions, index, image_name) in enumerate(data_loader):
+        for i, (images, captions, index, image_name) in tqdm(enumerate(data_loader)):
 
             captions = torch.cat([clip.tokenize(c) for c in captions])
+            captions = captions[:,:77]
             # compute the embeddings
             if torch.cuda.is_available():
                 images = images.cuda()
                 captions =  captions.cuda()
-
-            logits_per_image, logits_per_text = model(image, text)
+            # pdb.set_trace()
+            img_emb, cap_emb = model(images, captions)
         
             # initialize the numpy arrays given the size of the embeddings
             if img_embs is None:
