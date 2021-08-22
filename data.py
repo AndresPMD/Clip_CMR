@@ -36,7 +36,7 @@ class GenericDataset(data.Dataset):
         image_name = self.images[index]
         caption = self.captions[index]
         caption = caption.split(' ')
-        short_caption = caption[:40]
+        short_caption = caption[:60]
         # if index >= 3905:
         #     import pdb; pdb.set_trace()
         caption = ' '.join(short_caption)
@@ -46,7 +46,10 @@ class GenericDataset(data.Dataset):
         return image, caption, index, image_name
 
     def __len__(self):
-        return len(self.images)
+        if self.split == 'test' and self.data_name =='coco':
+            return int(len(self.images)/5)
+        else:
+            return len(self.images)
 
 #################
 

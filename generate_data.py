@@ -25,7 +25,7 @@ for item in test:
     
     for caption_dict in item['sentences']:
         with open ('./data/f30k_captions.txt', 'a') as fp:
-            fp.write(caption_dict['raw'].strip() + '\n')
+            fp.write('a photo of ' + caption_dict['raw'].strip() + '\n')
 
 # COCO
 # LAZY CODING
@@ -34,7 +34,7 @@ with open ("/SSD/COCO_raw/caption_datasets/dataset_coco.json" , "r") as fp:
 
 test = [i for i in anns['images'] if i['split'] == 'test']
 print("COCO Len: ", len(test))
-for item in test[:1000]:
+for item in test:
     # EVALER requires 5 times image input
     for i in range(5):
         with open ('./data/coco_images.txt', 'a') as fp:
@@ -43,6 +43,6 @@ for item in test[:1000]:
     for idx, caption_dict in enumerate (item['sentences']):
         if idx >= 5: break
         with open ('./data/coco_captions.txt', 'a') as fp:
-            fp.write(caption_dict['raw'].strip() + '\n')
+            fp.write('a photo of ' + caption_dict['raw'].strip() + '\n')
 
 print("Complete!")
