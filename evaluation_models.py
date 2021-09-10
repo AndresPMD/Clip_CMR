@@ -4,7 +4,7 @@ import pickle
 
 import torch
 import numpy
-from data import get_test_loader
+from data import get_split_loader
 import time
 import numpy as np
 from collections import OrderedDict
@@ -30,7 +30,8 @@ def encode_data(model, data_loader, log_step=10, logging=print):
     """Encode all images and captions loadable by `data_loader`
     """
     # switch to evaluate mode
-
+    model.eval()
+    print ("Evaluating...")
 
     # numpy array to keep all the embeddings
     img_embs = None
@@ -38,16 +39,17 @@ def encode_data(model, data_loader, log_step=10, logging=print):
     with torch.no_grad():
 
         for i, (images, captions, index, image_name) in tqdm(enumerate(data_loader)):
-
+            batch_size = images.shape[0]
             captions = torch.cat([clip.tokenize(c) for c in captions])
             # compute the embeddings
             if torch.cuda.is_available():
                 images = images.cuda()
-                captions =  captions.cuda()
+                captions = captions.cuda()
 
-            # img_emb, cap_emb = model(images, captions)
-            img_emb = model.encode_image(images)
-            cap_emb = model.encode_text(captions)
+
+            img_emb, cap_emb = model(images, captions)
+            # img_emb = model.encode_image(images)
+            # cap_emb = model.encode_text(captions)
             # import pdb; pdb.set_trace()
             # initialize the numpy arrays given the size of the embeddings
             if img_embs is None:
@@ -55,9 +57,10 @@ def encode_data(model, data_loader, log_step=10, logging=print):
                 cap_embs = np.zeros((len(data_loader.dataset), cap_emb.size(1)))
 
             # preserve the embeddings by copying from gpu and converting to numpy
-            img_embs[i] = img_emb.data.cpu().numpy().copy()
-            cap_embs[i] = cap_emb.data.cpu().numpy().copy()
-        
+            for idx in range(batch_size):
+                img_embs[i * batch_size + idx] = img_emb.data.cpu().numpy().copy()[idx]
+                cap_embs[i * batch_size + idx] = cap_emb.data.cpu().numpy().copy()[idx]
+
         del images, captions
 
     return img_embs, cap_embs
@@ -74,7 +77,7 @@ def evalrank(args):
     model, preprocess = clip.load(args.cnn, device=device)
 
     print('Loading dataset')
-    data_loader = get_test_loader(args.split, args.data_name, args.batch_size, args.workers, args, preprocess)
+    data_loader = get_split_loader(args.split, args.data_name, args.batch_size, args.workers, args, preprocess)
 
 
     print('Computing results...')
@@ -85,9 +88,14 @@ def evalrank(args):
           (img_embs.shape[0] / 5, cap_embs.shape[0]))
 
 
-    # no cross-validation, full evaluation
-    r, rt = i2t(img_embs, cap_embs, return_ranks=True)
-    ri, rti = t2i(img_embs, cap_embs, return_ranks=True)
+    # evaluation
+    if args.data_name == 'wiki':
+        npts = 1
+    else:
+        npts = None
+
+    r, rt = i2t(img_embs, cap_embs, return_ranks=True, npts=npts)
+    ri, rti = t2i(img_embs, cap_embs, return_ranks=True, npts=npts)
     ar = (r[0] + r[1] + r[2]) / 3
     ari = (ri[0] + ri[1] + ri[2]) / 3
     rsum = r[0] + r[1] + r[2] + ri[0] + ri[1] + ri[2]
@@ -105,7 +113,13 @@ def i2t(images, captions, npts=None, measure='cosine', return_ranks=False):
     Captions: (5N, K) matrix of captions
     """
     if npts is None:
-        npts = images.shape[0] / 5
+        caps_per_image = 5
+    else:
+        # Wiki
+        caps_per_image = 2
+
+    npts = images.shape[0] / caps_per_image
+
     index_list = []
     npts = int(npts)
     # import pdb; pdb.set_trace()
@@ -114,7 +128,7 @@ def i2t(images, captions, npts=None, measure='cosine', return_ranks=False):
     for index in range(npts):
 
         # Get query image
-        im = images[5 * index].reshape(1, images.shape[1])
+        im = images[caps_per_image * index].reshape(1, images.shape[1])
 
         # Compute scores
         if measure == 'order':
@@ -133,7 +147,7 @@ def i2t(images, captions, npts=None, measure='cosine', return_ranks=False):
 
         # Score
         rank = 1e20
-        for i in range(5 * index, 5 * index + 5, 1):
+        for i in range(caps_per_image * index, caps_per_image * index + caps_per_image, 1):
             tmp = numpy.where(inds == i)[0][0]
             if tmp < rank:
                 rank = tmp
@@ -159,16 +173,22 @@ def t2i(images, captions, npts=None, measure='cosine', return_ranks=False):
     Captions: (5N, K) matrix of captions
     """
     if npts is None:
-        npts = images.shape[0] / 5
-    ims = numpy.array([images[i] for i in range(0, len(images), 5)])
+        caps_per_image = 5
+    else:
+        # Wiki
+        caps_per_image = 2
+
+    npts = images.shape[0] / caps_per_image
+
+    ims = numpy.array([images[i] for i in range(0, len(images), caps_per_image)])
     npts = int(npts)
 
-    ranks = numpy.zeros(5 * npts)
-    top1 = numpy.zeros(5 * npts)
+    ranks = numpy.zeros(caps_per_image * npts)
+    top1 = numpy.zeros(caps_per_image * npts)
     for index in range(npts):
 
         # Get query captions
-        queries = captions[5 * index:5 * index + 5]
+        queries = captions[caps_per_image * index:caps_per_image * index + caps_per_image]
 
         # Compute scores
         if measure == 'order':
@@ -186,8 +206,8 @@ def t2i(images, captions, npts=None, measure='cosine', return_ranks=False):
         inds = numpy.zeros(d.shape)
         for i in range(len(inds)):
             inds[i] = numpy.argsort(d[i])[::-1]
-            ranks[5 * index + i] = numpy.where(inds[i] == index)[0][0]
-            top1[5 * index + i] = inds[i][0]
+            ranks[caps_per_image * index + i] = numpy.where(inds[i] == index)[0][0]
+            top1[caps_per_image * index + i] = inds[i][0]
 
     # Compute metrics
     r1 = 100.0 * len(numpy.where(ranks < 1)[0]) / len(ranks)

@@ -18,27 +18,36 @@ class GenericDataset(data.Dataset):
         self.data_name = data_name
 
         if self.data_name == 'coco':
-            self.img_path = '/SSD/COCO_raw/val2014/'
-        else:
+            if split == 'train':
+                self.img_path = '/SSD/COCO_raw/train2014/'
+            else:
+                self.img_path = '/SSD/COCO_raw/val2014/'
+
+        elif self.data_name =='f30k':
             self.img_path = '/SSD/Datasets/Flickr30K/images/'
+        else:
+            self.img_path = '/SSD/wiki/cmr_training_format/all_images/'
         
-        with open ("./data/{}_images.txt".format(self.data_name), "r") as fp:
+        with open ("./data/{}_{}_ims.txt".format(self.data_name, self.split), "r") as fp:
             self.images = fp.readlines()
         self.images = [image.strip() for image in self.images]
         
-        with open ("./data/{}_captions.txt".format(self.data_name), "r") as fp:
+        with open ("./data/{}_{}_caps.txt".format(self.data_name, self.split), "r") as fp:
             self.captions = fp.readlines()
         self.captions = [caption.strip() for caption in self.captions]
 
     def __getitem__(self, index):
         """This function returns a tuple that is further passed to collate_fn
         """
+        if self.data_name == 'f30k' or self.data_name == 'coco':
+            max_context_len = 60
+        else:
+            max_context_len = 25
+
         image_name = self.images[index]
         caption = self.captions[index]
-        caption = caption.split(' ')
-        short_caption = caption[:60]
-        # if index >= 3905:
-        #     import pdb; pdb.set_trace()
+        short_caption = caption.split(' ')
+        short_caption = short_caption[:max_context_len]
         caption = ' '.join(short_caption)
 
         image = self.transform(Image.open(self.img_path + image_name))
@@ -46,7 +55,8 @@ class GenericDataset(data.Dataset):
         return image, caption, index, image_name
 
     def __len__(self):
-        if self.split == 'test' and self.data_name =='coco':
+
+        if self.split == 'test' and self.data_name == 'coco': # TO CHECK
             return int(len(self.images)/5)
         else:
             return len(self.images)
@@ -58,19 +68,27 @@ def get_loader(transform, split, data_name, batch_size, num_workers, args,):
 
     dataset = GenericDataset(transform, split, data_name)
     # Data loader
-    data_loader = torch.utils.data.DataLoader(dataset=dataset,
+    if split =='train':
+        data_loader = torch.utils.data.DataLoader(dataset=dataset,
+                                                  batch_size=batch_size,
+                                                  shuffle=True,
+                                                  pin_memory=True,
+                                                  num_workers=num_workers)
+
+    else:
+        data_loader = torch.utils.data.DataLoader(dataset=dataset,
                                               batch_size=batch_size,
                                               shuffle=False,
                                               pin_memory=True,
                                               num_workers=num_workers)
     return data_loader
 
-def get_test_loader(split, data_name, batch_size, workers, args, preprocess):
+def get_split_loader(split, data_name, batch_size, workers, args, preprocess):
 
     # Build Dataset Loader
     transform = preprocess
 
-    test_loader = get_loader(transform, args.split, args.data_name, args.batch_size, args.workers, args,)
+    loader = get_loader(transform, split, data_name, batch_size, workers, args,)
 
-    return test_loader
+    return loader
 
