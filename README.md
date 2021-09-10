@@ -66,9 +66,11 @@ Run:
 Modify the data_path accordingly in the dataloader. 
 
 To train in Flickr30K run:
+
     $ python train.py --data_name f30k --logger_name runs/clip_ft_f30k
 
 To train in MSCOCO run:
+
     $ python train.py --data_name coco --logger_name runs/clip_ft_coco
 
 ## License
