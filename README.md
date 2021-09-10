@@ -1,4 +1,4 @@
-# CLIP BASED Image Retrieval 
+# CLIP based Image Text Matching 
 
 This projects employs CLIP (Paper: https://arxiv.org/pdf/2103.00020.pdf) as a backbone to perform image-text retrieval.
 
