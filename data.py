@@ -42,7 +42,7 @@ class GenericDataset(data.Dataset):
         if self.data_name == 'f30k' or self.data_name == 'coco':
             max_context_len = 60
         else:
-            max_context_len = 25
+            max_context_len = 20
 
         image_name = self.images[index]
         caption = self.captions[index]
