@@ -2,27 +2,42 @@ import os
 import json
 import pdb
 from tqdm import tqdm
+import re
 
 # GENERATES IMG LIST AND CAPTIONS OF F30K AND COCO FOR TESTING
 
-# Flickr30k
+
 def generate_files(items, split_name, dataset):
+    images = []
+    captions = []
     for item in items:
         # EVALER requires 5 times image input
         for i in range (5):
-            with open ('./data/{}_{}_ims.txt'.format(dataset, split_name), 'a') as fp :
-                fp.write(item['filename'] + '\n')
-        
+            images.append(item['filename'])
+
+        # Captions
         for idx, caption_dict in enumerate(item['sentences']):
-            if idx >= 5: break
-            with open ('./data/{}_{}_caps.txt'.format(dataset, split_name), 'a') as fp:
-                fp.write(caption_dict['raw'].strip() + '\n')
+            if idx >= 5:
+                break
+            else:
+                cleaned_string = re.sub(r'[^A-Za-z0-9 ]+', '', caption_dict['raw'])
+                captions.append(cleaned_string)
+
+    # Write Files
+    with open('./data/{}_{}_ims.txt'.format(dataset, split_name), 'w') as fp:
+        for i in images:
+            fp.write(i + '\n')
+
+    with open('./data/{}_{}_caps.txt'.format(dataset, split_name), 'w') as fp:
+        for c in captions:
+            fp.write(c.strip() + '\n')
+
 
 def main ():
     if os.path.exists('./data/'):
         for file in os.listdir("./data/"):
             os.remove('./data/' + file)
-    with open ("/SSD/Datasets/Flickr30K/dataset_flickr30k.json" , "r") as fp:
+    with open ("/SSD/Datasets/Flickr30K/dataset_flickr30k.json", "r") as fp:
         anns = json.load(fp)
 
     train = [i for i in anns['images'] if i['split'] == 'train']
@@ -39,10 +54,10 @@ def main ():
 
     # COCO
     # LAZY CODING
-    with open ("/SSD/COCO_raw/caption_datasets/dataset_coco.json" , "r") as fp:
+    with open ("/SSD/COCO_raw/caption_datasets/dataset_coco.json", "r") as fp:
         anns = json.load(fp)
 
-    train = [i for i in anns['images'] if i['split'] == 'train']
+    train = [i for i in anns['images'] if i['split'] == 'train' or i['split'] == 'restval']
     print("COCO train Len: ", len(train))
     generate_files(train, 'train', 'coco')
 

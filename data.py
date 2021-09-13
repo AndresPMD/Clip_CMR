@@ -18,10 +18,7 @@ class GenericDataset(data.Dataset):
         self.data_name = data_name
 
         if self.data_name == 'coco':
-            if split == 'train':
-                self.img_path = '/SSD/COCO_raw/train2014/'
-            else:
-                self.img_path = '/SSD/COCO_raw/val2014/'
+            self.img_path = '/SSD/COCO_raw/'
 
         elif self.data_name =='f30k':
             self.img_path = '/SSD/Datasets/Flickr30K/images/'
@@ -39,18 +36,25 @@ class GenericDataset(data.Dataset):
     def __getitem__(self, index):
         """This function returns a tuple that is further passed to collate_fn
         """
-        if self.data_name == 'f30k' or self.data_name == 'coco':
-            max_context_len = 60
-        else:
-            max_context_len = 20
-
         image_name = self.images[index]
         caption = self.captions[index]
+
+        if self.data_name =='wiki':
+            max_context_len = 20
+        else:
+            max_context_len = 60
+
+        if self.data_name == 'f30k' or self.data_name == 'wiki':
+            img_path = self.img_path
+        else:
+            coco_split_folder = image_name.split("_")[1]
+            img_path = self.img_path + coco_split_folder + '/'
+
         short_caption = caption.split(' ')
         short_caption = short_caption[:max_context_len]
         caption = ' '.join(short_caption)
 
-        image = self.transform(Image.open(self.img_path + image_name))
+        image = self.transform(Image.open(img_path + image_name))
 
         return image, caption, index, image_name
 
