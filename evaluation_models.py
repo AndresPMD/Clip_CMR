@@ -11,6 +11,7 @@ from collections import OrderedDict
 import clip
 from PIL import Image
 from tqdm import tqdm
+from model import *
 
 def order_sim(im, s):
     """Order embeddings similarity measure $max(0, s-im)$
@@ -72,27 +73,37 @@ def evalrank(args):
     used for evaluation.
     """
     # load model and options
+
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print ("Running on: ", device)
-    model, preprocess = clip.load(args.cnn, device=device)
+
+    model_clip, preprocess = clip.load(args.cnn, device=device)
 
     print('Loading dataset')
     data_loader = get_split_loader(args.split, args.data_name, args.batch_size, args.workers, args, preprocess)
 
-
     print('Computing results...')
-    img_embs, cap_embs = encode_data(model, data_loader)
-    
+    if args.clip:
+        img_embs, cap_embs = encode_data(model_clip, data_loader)
+    else:
 
-    print('Images: %d, Captions: %d' %
-          (img_embs.shape[0] / 5, cap_embs.shape[0]))
-
+        model = Clip_Linear(model_clip, args)
+        weights = torch.load(args.weights)['model']
+        model.load_state_dict(weights)
+        model.cuda()
+        img_embs, cap_embs = encode_data(model, data_loader)
 
     # evaluation
     if args.data_name == 'wiki':
         npts = 1
+        caps_per_image = 2
     else:
         npts = None
+        caps_per_image = 5
+    
+    print('Images: %d, Captions: %d' %
+          (img_embs.shape[0]/caps_per_image , cap_embs.shape[0]))
+
 
     r, rt = i2t(img_embs, cap_embs, return_ranks=True, npts=npts)
     ri, rti = t2i(img_embs, cap_embs, return_ranks=True, npts=npts)
